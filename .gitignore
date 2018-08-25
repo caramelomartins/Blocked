@@ -1,0 +1,7 @@
+# Development
+.vscode
+sqlite-ac.db
+
+# Python
+__pycache__/
+*.py[cod]
