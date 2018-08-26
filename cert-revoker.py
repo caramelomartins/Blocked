@@ -1,10 +1,6 @@
 #!/usr/bin/env python
 import argparse
-import datetime
 import hashlib
-import json
-import logging
-import uuid
 from urllib import error, request
 
 import cbor
@@ -16,17 +12,14 @@ from sawtooth_signing import CryptoFactory, create_context, secp256k1
 from processor import addresser
 
 
-class CertificateIssuer():
+class CertificateRevoker():
 
-    def __init__(self, issuer, recipient, content):
+    def __init__(self, key, certificate):
         context = create_context('secp256k1')
-        private_key = self._extract_private_key_from_file(issuer)
-        recipient_pkey = self._extract_public_key_from_file(recipient)
+        private_key = self._extract_private_key_from_file(key)
 
+        self._certificate = certificate
         self._transaction_signer = CryptoFactory(context).new_signer(private_key)
-        self._recipient = recipient_pkey
-        self._content = content
-        self._identifier = uuid.uuid4().hex
 
     def _extract_private_key_from_file(self, source):
         with open(source, 'r') as file:
@@ -34,16 +27,10 @@ class CertificateIssuer():
 
         return secp256k1.Secp256k1PrivateKey.from_hex(data)
 
-    def _extract_public_key_from_file(self, source):
-        with open(source, 'r') as file:
-            data = file.readlines()[0]
-
-        return secp256k1.Secp256k1PublicKey.from_hex(data)
-
-    def _generate_batch(self, issuer, recipient, content):
-        payload = self._make_payload(issuer, recipient, content)
-        address = addresser._make_certificate_address(self._identifier.encode())
-        transaction = self._make_transaction(address, issuer, cbor.dumps(payload))
+    def _generate_batch(self, key):
+        payload = self._make_payload()
+        address = addresser._make_certificate_address(self._certificate.encode())
+        transaction = self._make_transaction(address, key, cbor.dumps(payload))
         batch = self._make_batch(transaction)
 
         batch_list = BatchList(batches=[batch]).SerializeToString()
@@ -66,14 +53,15 @@ class CertificateIssuer():
         )
         return batch
 
-    def _make_transaction(self, address, issuer, payload):
+    def _make_transaction(self, address, key, payload):
+
         header = TransactionHeader(
             family_name=addresser.FAMILY_NAME,
             family_version=addresser.FAMILY_VERSION,
             inputs=[address],
             outputs=[address],
-            signer_public_key=issuer,
-            batcher_public_key=issuer,
+            signer_public_key=key,
+            batcher_public_key=key,
             dependencies=[],
             payload_sha512=hashlib.sha512(payload).hexdigest()
         ).SerializeToString()
@@ -87,28 +75,17 @@ class CertificateIssuer():
         )
         return transaction
 
-    def _make_payload(self, issuer, recipient, content):
+    def _make_payload(self):
         payload = {}
-        payload['op'] = 'issue'
+        payload['op'] = 'revoke'
         payload['data'] = {}
-        payload['data']['id'] = self._identifier
-        payload['data']['issuer'] = issuer
-        payload['data']['recipient'] = recipient
-        payload['data']['issuer_at'] = str(datetime.datetime.now())
-        payload['data']['content'] = content
-        payload['data']['active'] = True
-        payload['data']['permissions'] = []
+        payload['data']['id'] = self._certificate
 
         return payload
 
     def main(self):
         signer_public_key = self._transaction_signer.get_public_key().as_hex()
-
-        batch_list = self._generate_batch(
-            signer_public_key,
-            self._recipient.as_hex(),
-            self._content
-        )
+        batch_list = self._generate_batch(signer_public_key)
 
         try:
             req = request.Request(
@@ -121,16 +98,14 @@ class CertificateIssuer():
         except error.HTTPError as e:
             resp = e.file
 
-        print('identifier:', self._identifier)
         print(resp.read().decode())
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--issuer', required=True)
-    parser.add_argument('--recipient', required=True)
-    parser.add_argument('--content', default=None)
+    parser.add_argument('--key', required=True)
+    parser.add_argument('--certificate', required=True)
     args = parser.parse_args()
 
-    issuer = CertificateIssuer(args.issuer, args.recipient, args.content)
+    issuer = CertificateRevoker(args.key, args.certificate)
     issuer.main()

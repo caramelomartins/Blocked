@@ -19,7 +19,7 @@ def main():
         processor.start()
     except KeyboardInterrupt:
         pass
-    except Exception as err:  # pylint: disable=broad-except
+    except Exception as err:
         print("Error: {}".format(err))
     finally:
         if processor is not None:
