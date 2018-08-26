@@ -3,7 +3,7 @@ import logging
 from sawtooth_sdk.processor.core import TransactionProcessor
 from sawtooth_sdk.processor.log import init_console_logging
 
-from handler import SawtoothHandler
+from handler import BlockedHandler
 
 
 def main():
@@ -14,7 +14,7 @@ def main():
         logger.debug('started main')
 
         processor = TransactionProcessor(url='tcp://localhost:4004')
-        handler = SawtoothHandler()
+        handler = BlockedHandler()
         processor.add_handler(handler)
         processor.start()
     except KeyboardInterrupt:

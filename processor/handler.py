@@ -1,12 +1,13 @@
-import cbor
-import logging
 import hashlib
+import logging
+
+import cbor
 from sawtooth_sdk.processor.handler import TransactionHandler
 
 import addresser
 
 
-class SawtoothHandler(TransactionHandler):
+class BlockedHandler(TransactionHandler):
 
     @property
     def family_name(self):
@@ -28,16 +29,13 @@ class SawtoothHandler(TransactionHandler):
         logger.debug(payload)
 
         if payload['op'] == 'issue':
-            self._issue_certificate(payload['data'], context)
+            addresses = self._issue_certificate(payload['data'], context)
+
+        logger.debug(addresses)
 
     def _issue_certificate(self, data, context):
-        """"""
-        address = "{}{}{}".format(
-            addresser.NAMESPACE,
-            hashlib.sha256(data['issuer'].encode()).hexdigest()[:32],
-            hashlib.sha256(data['recipient'].encode()).hexdigest()[:32]
+        address = addresser._make_certificate_address(
+            data['issuer'].encode(), data['recipient'].encode()
         )
 
-        logger = logging.getLogger()
-
-        context.set_state({address: cbor.dumps(data)})
+        return context.set_state({address: cbor.dumps(data)})
