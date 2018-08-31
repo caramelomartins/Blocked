@@ -11,7 +11,7 @@ FAMILY_VERSION = '0.1'
 NAMESPACE = hashlib.sha512(FAMILY_NAME.encode('utf-8')).hexdigest()[:6]
 
 
-def _make_certificate_address(identifier):
+def make_certificate_address(identifier):
     return '{}{}'.format(
         NAMESPACE,
         hashlib.sha512(identifier).hexdigest()[:64]

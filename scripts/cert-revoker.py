@@ -19,29 +19,23 @@ from processor import addresser
 
 class CertificateRevoker():
 
-    def __init__(self, key, certificate):
-        context = create_context('secp256k1')
-        private_key = self._extract_private_key_from_file(key)
-
+    def __init__(self, certificate, secret):
+        self._context = create_context('secp256k1')
+        self._private_key = secp256k1.Secp256k1PrivateKey.from_hex(secret)
         self._certificate = certificate
-        self._transaction_signer = CryptoFactory(context).new_signer(private_key)
+        self._transaction_signer = CryptoFactory(self._context).new_signer(self._private_key)
 
-    def _extract_private_key_from_file(self, source):
-        with open(source, 'r') as file:
-            data = file.readlines()[0]
-
-        return secp256k1.Secp256k1PrivateKey.from_hex(data)
-
-    def _generate_batch(self, key):
+    def _generate_batch(self, public_key):
         payload = self._make_payload()
-        address = addresser._make_certificate_address(self._certificate.encode())
-        transaction = self._make_transaction(address, key, cbor.dumps(payload))
+        address = addresser.make_certificate_address(self._certificate.encode())
+        transaction = self._make_transaction(address, public_key, cbor.dumps(payload))
         batch = self._make_batch(transaction)
 
         batch_list = BatchList(batches=[batch]).SerializeToString()
         return batch_list
 
     def _make_batch(self, txn):
+        print('Creating Batch...', end='', flush=True)
         transactions = [txn]
 
         batch_header = BatchHeader(
@@ -56,17 +50,19 @@ class CertificateRevoker():
             header_signature=signature,
             transactions=transactions
         )
+        print('[OK]')
+
         return batch
 
-    def _make_transaction(self, address, key, payload):
-
+    def _make_transaction(self, address, public_key, payload):
+        print('Creating Transaction...', end='', flush=True)
         header = TransactionHeader(
             family_name=addresser.FAMILY_NAME,
             family_version=addresser.FAMILY_VERSION,
             inputs=[address],
             outputs=[address],
-            signer_public_key=key,
-            batcher_public_key=key,
+            signer_public_key=public_key,
+            batcher_public_key=public_key,
             dependencies=[],
             payload_sha512=hashlib.sha512(payload).hexdigest()
         ).SerializeToString()
@@ -78,6 +74,8 @@ class CertificateRevoker():
             header_signature=signature,
             payload=payload
         )
+        print('[OK]')
+
         return transaction
 
     def _make_payload(self):
@@ -92,6 +90,7 @@ class CertificateRevoker():
         signer_public_key = self._transaction_signer.get_public_key().as_hex()
         batch_list = self._generate_batch(signer_public_key)
 
+        print('Submitting Request...', end='', flush=True)
         try:
             req = request.Request(
                 'http://localhost:8008/batches',
@@ -102,15 +101,18 @@ class CertificateRevoker():
             resp = request.urlopen(req)
         except error.HTTPError as e:
             resp = e.file
+        print('[OK]')
 
+        print('Addresses:')
         print(resp.read().decode())
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--key', required=True)
-    parser.add_argument('--certificate', required=True)
+    parser.add_argument('-c', '--certificate', help="identifier of certificate", required=True)
+    parser.add_argument(
+        '-s', '--secret', help='subject that is performing management', required=True)
     args = parser.parse_args()
 
-    issuer = CertificateRevoker(args.key, args.certificate)
+    issuer = CertificateRevoker(args.certificate, args.secret)
     issuer.main()

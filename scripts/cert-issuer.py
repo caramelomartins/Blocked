@@ -21,31 +21,18 @@ from processor import addresser
 
 class CertificateIssuer():
 
-    def __init__(self, issuer, recipient, content):
-        context = create_context('secp256k1')
-        private_key = self._extract_private_key_from_file(issuer)
-        recipient_pkey = self._extract_public_key_from_file(recipient)
+    def __init__(self, issuer, recipient, secret):
+        self._context = create_context('secp256k1')
+        self._private_key = secp256k1.Secp256k1PrivateKey.from_hex(secret)
+        self._transaction_signer = CryptoFactory(self._context).new_signer(self._private_key)
+        self._recipient = secp256k1.Secp256k1PublicKey.from_hex(recipient)
+        self._issuer = issuer
 
-        self._transaction_signer = CryptoFactory(context).new_signer(private_key)
-        self._recipient = recipient_pkey
-        self._content = content
         self._identifier = uuid.uuid4().hex
 
-    def _extract_private_key_from_file(self, source):
-        with open(source, 'r') as file:
-            data = file.readlines()[0]
-
-        return secp256k1.Secp256k1PrivateKey.from_hex(data)
-
-    def _extract_public_key_from_file(self, source):
-        with open(source, 'r') as file:
-            data = file.readlines()[0]
-
-        return secp256k1.Secp256k1PublicKey.from_hex(data)
-
-    def _generate_batch(self, issuer, recipient, content):
-        payload = self._make_payload(issuer, recipient, content)
-        address = addresser._make_certificate_address(self._identifier.encode())
+    def _generate_batch(self, issuer, recipient):
+        payload = self._make_payload(issuer, recipient)
+        address = addresser.make_certificate_address(self._identifier.encode())
         transaction = self._make_transaction(address, issuer, cbor.dumps(payload))
         batch = self._make_batch(transaction)
 
@@ -53,6 +40,7 @@ class CertificateIssuer():
         return batch_list
 
     def _make_batch(self, txn):
+        print('Creating Batch...', end='', flush=True)
         transactions = [txn]
 
         batch_header = BatchHeader(
@@ -67,9 +55,12 @@ class CertificateIssuer():
             header_signature=signature,
             transactions=transactions
         )
+        print('[OK]')
+
         return batch
 
     def _make_transaction(self, address, issuer, payload):
+        print('Creating Transaction...', end='', flush=True)
         header = TransactionHeader(
             family_name=addresser.FAMILY_NAME,
             family_version=addresser.FAMILY_VERSION,
@@ -88,17 +79,19 @@ class CertificateIssuer():
             header_signature=signature,
             payload=payload
         )
+        print('[OK]')
+
         return transaction
 
-    def _make_payload(self, issuer, recipient, content):
+    def _make_payload(self, issuer, recipient):
         payload = {}
+
         payload['op'] = 'issue'
         payload['data'] = {}
         payload['data']['id'] = self._identifier
         payload['data']['issuer'] = issuer
         payload['data']['recipient'] = recipient
         payload['data']['issuer_at'] = str(datetime.datetime.now())
-        payload['data']['content'] = content
         payload['data']['active'] = True
         payload['data']['permissions'] = []
 
@@ -107,12 +100,15 @@ class CertificateIssuer():
     def main(self):
         signer_public_key = self._transaction_signer.get_public_key().as_hex()
 
+        if signer_public_key != self._issuer:
+            raise Exception('your identity does not match')
+
         batch_list = self._generate_batch(
             signer_public_key,
             self._recipient.as_hex(),
-            self._content
         )
 
+        print('Submitting Request...', end='', flush=True)
         try:
             req = request.Request(
                 'http://localhost:8008/batches',
@@ -123,17 +119,19 @@ class CertificateIssuer():
             resp = request.urlopen(req)
         except error.HTTPError as e:
             resp = e.file
+        print('[OK]')
 
         print('identifier:', self._identifier)
+        print('Addresses:')
         print(resp.read().decode())
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--issuer', required=True)
-    parser.add_argument('--recipient', required=True)
-    parser.add_argument('--content', default=None)
+    parser.add_argument('--issuer', help="issuer of certificate", required=True)
+    parser.add_argument('--recipient', help="recipient of certificate", required=True)
+    parser.add_argument('--secret', help='secret key to validate identity', required=True)
     args = parser.parse_args()
 
-    issuer = CertificateIssuer(args.issuer, args.recipient, args.content)
+    issuer = CertificateIssuer(args.issuer, args.recipient, args.secret)
     issuer.main()

@@ -36,7 +36,7 @@ class BlockedHandler(TransactionHandler):
 
         # Call matching method for current operation.
         operation = payload['op']
-        address = addresser._make_certificate_address(payload['data']['id'].encode())
+        address = addresser.make_certificate_address(payload['data']['id'].encode())
 
         if operation == 'issue':
             addresses = self._issue_certificate(payload['data'], address, context)
@@ -49,7 +49,7 @@ class BlockedHandler(TransactionHandler):
         else:
             raise InvalidTransaction('unrecognized operation')
 
-        print('Updated addresses:')
+        print('Addresses:')
         print(addresses)
 
     def _issue_certificate(self, data, address, context):
