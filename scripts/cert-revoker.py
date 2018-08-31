@@ -1,4 +1,9 @@
 #!/usr/bin/env python
+"""
+cert-revoker.py
+
+This script allows users to revoke a given certificate.
+"""
 import argparse
 import hashlib
 from urllib import error, request

@@ -1,3 +1,9 @@
+"""
+addresser.py
+
+This file contains functions and properties related to the addressing scheme and
+namespace management for `blocked`.
+"""
 import hashlib
 
 FAMILY_NAME = 'blocked'

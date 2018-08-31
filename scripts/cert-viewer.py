@@ -1,10 +1,15 @@
 #!/usr/bin/env python
+"""
+cert-viewer.py
+
+Views the contents of a given certificate.
+"""
 import argparse
 import base64
-import cbor
 import json
 from urllib import error, request
 
+import cbor
 from sawtooth_signing import CryptoFactory, create_context, secp256k1
 
 from processor import addresser

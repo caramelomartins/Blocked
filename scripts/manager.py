@@ -1,4 +1,9 @@
 #!/usr/bin/env python
+"""
+manager.py
+
+This script allows users to manage access control policies for the system.
+"""
 import argparse
 import hashlib
 from urllib import error, request

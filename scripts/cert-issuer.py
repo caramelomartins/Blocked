@@ -1,9 +1,12 @@
 #!/usr/bin/env python
+"""
+cert-issuer.py
+
+Issue a certificate from a given Institution to a given Student.
+"""
 import argparse
 import datetime
 import hashlib
-import json
-import logging
 import uuid
 from urllib import error, request
 

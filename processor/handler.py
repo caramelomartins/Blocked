@@ -1,9 +1,14 @@
-import hashlib
+"""
+handler.py
+
+This file contains the class for the handler logic of the transaction processor
+for the blocked family in Hyperledger Sawtooth.
+"""
 import logging
 
 import cbor
-from sawtooth_sdk.processor.handler import TransactionHandler
 from sawtooth_sdk.processor.exceptions import InvalidTransaction
+from sawtooth_sdk.processor.handler import TransactionHandler
 
 import addresser
 
