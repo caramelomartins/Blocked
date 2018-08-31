@@ -30,25 +30,29 @@ class BlockedHandler(TransactionHandler):
         return [addresser.NAMESPACE]
 
     def apply(self, transaction, context):
+        # Unpack transaction.
         header = transaction.header
         payload = self._deserialize(transaction.payload)
 
-        if payload['op'] == 'issue':
-            addresses = self._issue_certificate(payload['data'], context)
-        elif payload['op'] == 'revoke':
-            addresses = self._revoke_certificate(header, payload['data'], context)
-        elif payload['op'] == 'grant_access':
-            addresses = self._grant_access(header, payload['data'], context)
-        elif payload['op'] == 'revoke_access':
-            addresses = self._revoke_access(header, payload['data'], context)
+        # Call matching method for current operation.
+        operation = payload['op']
+        address = addresser._make_certificate_address(payload['data']['id'].encode())
+
+        if operation == 'issue':
+            addresses = self._issue_certificate(payload['data'], address, context)
+        elif operation == 'revoke':
+            addresses = self._revoke_certificate(header, payload['data'], address, context)
+        elif operation == 'grant_access':
+            addresses = self._grant_access(header, payload['data'], address, context)
+        elif operation == 'revoke_access':
+            addresses = self._revoke_access(header, payload['data'], address, context)
         else:
             raise InvalidTransaction('unrecognized operation')
 
+        print('Updated addresses:')
         print(addresses)
 
-    def _issue_certificate(self, data, context):
-        address = addresser._make_certificate_address(data['id'].encode())
-
+    def _issue_certificate(self, data, address, context):
         state_entries = self._get_existing_certificates(context, address)
 
         if state_entries:
@@ -56,9 +60,7 @@ class BlockedHandler(TransactionHandler):
         else:
             return context.set_state({address: self._serialize(data)})
 
-    def _revoke_certificate(self, header, data, context):
-        address = addresser._make_certificate_address(data['id'].encode())
-
+    def _revoke_certificate(self, header, data, address, context):
         state_entries = self._get_existing_certificates(context, address)
 
         if state_entries:
@@ -74,9 +76,7 @@ class BlockedHandler(TransactionHandler):
         else:
             raise InvalidTransaction('certificate does not exist')
 
-    def _grant_access(self, header, data, context):
-        address = addresser._make_certificate_address(data['id'].encode())
-
+    def _grant_access(self, header, data, address, context):
         state_entries = self._get_existing_certificates(context, address)
 
         if state_entries:
@@ -91,9 +91,7 @@ class BlockedHandler(TransactionHandler):
         else:
             raise InvalidTransaction('certificate does not exist')
 
-    def _revoke_access(self, header, data, context):
-        address = addresser._make_certificate_address(data['id'].encode())
-
+    def _revoke_access(self, header, data, address, context):
         state_entries = self._get_existing_certificates(context, address)
 
         if state_entries:
