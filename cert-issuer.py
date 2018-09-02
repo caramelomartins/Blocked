@@ -93,7 +93,7 @@ class CertificateIssuer():
         payload['data']['recipient'] = recipient
         payload['data']['issuer_at'] = str(datetime.datetime.now())
         payload['data']['active'] = True
-        payload['data']['permissions'] = []
+        payload['data']['permissions'] = [self._issuer, self._recipient.as_hex()]
 
         return payload
 

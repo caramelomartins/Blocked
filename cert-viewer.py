@@ -47,7 +47,7 @@ class CertificateViewer():
             encoded_data = json.loads(raw_data)
             data = cbor.loads(base64.b64decode(encoded_data['data']))
 
-            if self._public in data['permissions']:
+            if self._public.as_hex() in data['permissions']:
                 print(json.dumps(data, indent=4))
             else:
                 print('error: you do not have permissions to view this certificate')
