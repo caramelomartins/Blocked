@@ -66,11 +66,11 @@ class BlockedHandler(TransactionHandler):
         if state_entries:
             certificate = self._deserialize(state_entries[0].data)
 
-            if header.signer_public_key != certificate['issuer'] and \
-                    header.signer_public_key != certificate['recipient']:
-                raise InvalidTransaction('subject has no permission to execute this operation')
+            if header.signer_public_key not in certificate['owners'] and \
+                    header.signer_public_key not in certificate['owners']:
+                raise InvalidTransaction('subject is not an owner of this certificate')
 
-            certificate['active'] = False
+            certificate['certificate'] = data['certificate']
 
             return context.set_state({address: self._serialize(certificate)})
         else:
@@ -82,10 +82,12 @@ class BlockedHandler(TransactionHandler):
         if state_entries:
             certificate = self._deserialize(state_entries[0].data)
 
-            if header.signer_public_key != certificate['recipient']:
+            if header.signer_public_key not in certificate['owners']:
                 raise InvalidTransaction('subject has no permission to execute this operation')
 
-            certificate['permissions'].append(data['subject'])
+            certificate['permissions'].append(
+                {data['permissions']['id']: data['permissions']['data']}
+            )
 
             return context.set_state({address: self._serialize(certificate)})
         else:
@@ -97,10 +99,20 @@ class BlockedHandler(TransactionHandler):
         if state_entries:
             certificate = self._deserialize(state_entries[0].data)
 
-            if header.signer_public_key != certificate['recipient']:
+            if header.signer_public_key not in certificate['owners']:
                 raise InvalidTransaction('subject has no permission to execute this operation')
 
-            certificate['permissions'].remove(data['subject'])
+            permissions = []
+
+            for p in certificate['permissions']:
+                print(data['permissions']['id'])
+                print(list(p.keys())[0])
+                if list(p.keys())[0] != data['permissions']['id']:
+                    permissions.append(p)
+
+            print(permissions)
+
+            certificate['permissions'] = permissions
 
             return context.set_state({address: self._serialize(certificate)})
         else:

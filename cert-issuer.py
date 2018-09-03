@@ -5,12 +5,19 @@ cert-issuer.py
 Issue a certificate from a given Institution to a given Student.
 """
 import argparse
+import base64
 import datetime
 import hashlib
+import json
 import uuid
 from urllib import error, request
 
 import cbor
+import Crypto
+import pyDes
+from Crypto import Random
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.PublicKey import RSA
 from sawtooth_sdk.protobuf.batch_pb2 import Batch, BatchHeader, BatchList
 from sawtooth_sdk.protobuf.transaction_pb2 import (Transaction,
                                                    TransactionHeader)
@@ -27,8 +34,13 @@ class CertificateIssuer():
         self._transaction_signer = CryptoFactory(self._context).new_signer(self._private_key)
         self._recipient = secp256k1.Secp256k1PublicKey.from_hex(recipient)
         self._issuer = issuer
-
+        self._symmetric_key = b'weirdkey'
         self._identifier = uuid.uuid4().hex
+
+        self._issuer_rsa = RSA.importKey(open('keys/issuer.keys/rsa/issuer', 'r').read())
+        self._issuer_rsa_public = self._issuer_rsa.publickey()
+        self._recipient_rsa = RSA.importKey(open('keys/recipient.keys/rsa/recipient', 'r').read())
+        self._recipient_rsa_public = self._recipient_rsa.publickey()
 
     def _generate_batch(self, issuer, recipient):
         payload = self._make_payload(issuer, recipient)
@@ -64,8 +76,10 @@ class CertificateIssuer():
         header = TransactionHeader(
             family_name=addresser.FAMILY_NAME,
             family_version=addresser.FAMILY_VERSION,
-            inputs=[address],
-            outputs=[address],
+            inputs=[address, addresser.make_certificate_address(
+                self._issuer.encode()), addresser.make_certificate_address(self._recipient.as_hex().encode())],
+            outputs=[address, addresser.make_certificate_address(
+                self._issuer.encode()), addresser.make_certificate_address(self._recipient.as_hex().encode())],
             signer_public_key=issuer,
             batcher_public_key=issuer,
             dependencies=[],
@@ -84,18 +98,54 @@ class CertificateIssuer():
         return transaction
 
     def _make_payload(self, issuer, recipient):
+
+        certificate = {
+            'issuer': issuer,
+            'recipient': recipient,
+            'issued_at': str(datetime.datetime.now()),
+            'active': True
+        }
+
+        encrypted_certificate = self._encrypt(certificate)
+        encoded_symmetric_key = base64.b64encode(self._symmetric_key)
+
         payload = {}
 
         payload['op'] = 'issue'
         payload['data'] = {}
         payload['data']['id'] = self._identifier
-        payload['data']['issuer'] = issuer
-        payload['data']['recipient'] = recipient
-        payload['data']['issuer_at'] = str(datetime.datetime.now())
-        payload['data']['active'] = True
-        payload['data']['permissions'] = [self._issuer, self._recipient.as_hex()]
+        payload['data']['certificate'] = encrypted_certificate.decode()
+        payload['data']['owners'] = [
+            self._issuer,
+            self._recipient.as_hex()
+        ]
+        payload['data']['permissions'] = [
+            {
+                self._issuer: base64.b64encode(PKCS1_OAEP.new(self._issuer_rsa).encrypt(
+                    encoded_symmetric_key)).decode()
+            },
+            {
+                self._recipient.as_hex(): base64.b64encode(PKCS1_OAEP.new(self._recipient_rsa).encrypt(
+                    encoded_symmetric_key)).decode()
+            }
+        ]
+
+        print(payload)
 
         return payload
+
+    def _encrypt(self, data):
+        k = pyDes.des(
+            self._symmetric_key,
+            pyDes.CBC,
+            b"\0\0\0\0\0\0\0\0",
+            pad=None,
+            padmode=pyDes.PAD_PKCS5
+        )
+        d = k.encrypt(json.dumps(data).encode('utf-8'))
+        assert k.decrypt(d) == json.dumps(data).encode('utf-8')
+
+        return base64.b64encode(d)
 
     def main(self):
         signer_public_key = self._transaction_signer.get_public_key().as_hex()

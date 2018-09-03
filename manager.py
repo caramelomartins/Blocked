@@ -5,10 +5,17 @@ manager.py
 This script allows users to manage access control policies for the system.
 """
 import argparse
+import base64
 import hashlib
+import json
 from urllib import error, request
 
 import cbor
+import Crypto
+import pyDes
+from Crypto import Random
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.PublicKey import RSA
 from sawtooth_sdk.protobuf.batch_pb2 import Batch, BatchHeader, BatchList
 from sawtooth_sdk.protobuf.transaction_pb2 import (Transaction,
                                                    TransactionHeader)
@@ -26,8 +33,13 @@ class PermissionsManager():
         self._certificate = certificate
         self._remove = remove
 
-    def _generate_batch_list(self, key):
-        payload = self._make_payload()
+        self._recruiter_rsa = RSA.importKey(open('keys/recruiter.keys/rsa/recruiter', 'r').read())
+        self._recruiter_rsa_public = self._recruiter_rsa.publickey()
+        self._recipient_rsa = RSA.importKey(open('keys/recipient.keys/rsa/recipient', 'r').read())
+        self._recipient_rsa_public = self._recipient_rsa.publickey()
+
+    def _generate_batch_list(self, key, symmetric_key):
+        payload = self._make_payload(symmetric_key)
         address = addresser.make_certificate_address(self._certificate.encode())
         transaction = self._make_transaction(address, key, cbor.dumps(payload))
         batch = self._make_batch(transaction)
@@ -60,8 +72,8 @@ class PermissionsManager():
         header = TransactionHeader(
             family_name=addresser.FAMILY_NAME,
             family_version=addresser.FAMILY_VERSION,
-            inputs=[address],
-            outputs=[address],
+            inputs=[address, addresser.make_certificate_address(self._subject.as_hex().encode())],
+            outputs=[address, addresser.make_certificate_address(self._subject.as_hex().encode())],
             signer_public_key=key,
             batcher_public_key=key,
             dependencies=[],
@@ -79,8 +91,10 @@ class PermissionsManager():
 
         return transaction
 
-    def _make_payload(self):
+    def _make_payload(self, symmetric_key):
         payload = {}
+
+        encoded_symmetric_key = base64.b64encode(symmetric_key)
 
         if self._remove:
             payload['op'] = 'revoke_access'
@@ -89,20 +103,40 @@ class PermissionsManager():
 
         payload['data'] = {}
         payload['data']['id'] = self._certificate
-        payload['data']['subject'] = self._subject.as_hex()
+        payload['data']['permissions'] = {
+            'data': base64.b64encode(PKCS1_OAEP.new(self._recruiter_rsa).encrypt(encoded_symmetric_key)).decode(),
+            'id': self._subject.as_hex()
+        }
 
         return payload
 
-    def main(self):
-        signer_public_key = self._transaction_signer.get_public_key().as_hex()
-        batch_list = self._generate_batch_list(signer_public_key)
+    def _decrypt_symmetric_key(self, permissions):
+        symmetric_key = None
 
-        print('Submitting Request...', end='', flush=True)
+        for i, p in enumerate(permissions):
+            try:
+                print('Attempt {}...'.format(i + 1), end='', flush=True)
+                symmetric_key = PKCS1_OAEP.new(self._recipient_rsa).decrypt(
+                    base64.b64decode(p[list(p.keys())[0]].encode()))
+                print('[OK]')
+                break
+            except ValueError:
+                print('[Error]')
+
+        if not symmetric_key:
+            print('error: you do not have permission to access this certificate')
+            exit()
+        return base64.b64decode(symmetric_key)
+
+    def main(self):
+        address = addresser.make_certificate_address(self._certificate.encode())
+        signer_public_key = self._transaction_signer.get_public_key().as_hex()
+
+        print('Fetching Data...', end='', flush=True)
         try:
             req = request.Request(
-                'http://localhost:8008/batches',
-                batch_list,
-                method='POST',
+                'http://localhost:8008/state/{}'.format(address),
+                method='GET',
                 headers={'Content-Type': 'application/octet-stream'}
             )
             resp = request.urlopen(req)
@@ -111,8 +145,33 @@ class PermissionsManager():
             resp = e.file
         print('[OK]')
 
-        print("Addresses:")
-        print(resp.read().decode())
+        raw_data = resp.read()
+
+        if raw_data:
+            encoded_data = json.loads(raw_data)
+            data = cbor.loads(base64.b64decode(encoded_data['data']))
+            symmetric_key = self._decrypt_symmetric_key(data['permissions'])
+
+            batch_list = self._generate_batch_list(signer_public_key, symmetric_key)
+
+            print('Submitting Request...', end='', flush=True)
+            try:
+                req = request.Request(
+                    'http://localhost:8008/batches',
+                    batch_list,
+                    method='POST',
+                    headers={'Content-Type': 'application/octet-stream'}
+                )
+                resp = request.urlopen(req)
+            except error.HTTPError as e:
+                print('[Error]')
+                resp = e.file
+            print('[OK]')
+
+            print("Addresses:")
+            print(resp.read().decode())
+        else:
+            print('error: could not find certificate')
 
 
 if __name__ == '__main__':
