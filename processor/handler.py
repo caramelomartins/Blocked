@@ -10,7 +10,7 @@ import cbor
 from sawtooth_sdk.processor.exceptions import InvalidTransaction
 from sawtooth_sdk.processor.handler import TransactionHandler
 
-import addressing
+from addressing import addresser
 
 LOGGER = logging.getLogger()
 
@@ -19,110 +19,135 @@ class BlockedHandler(TransactionHandler):
 
     @property
     def family_name(self):
-        return addressing.addresser.FAMILY_NAME
+        return addresser.FAMILY_NAME
 
     @property
     def family_versions(self):
-        return [addressing.addresser.FAMILY_VERSION]
+        return [addresser.FAMILY_VERSION]
 
     @property
     def namespaces(self):
-        return [addressing.addresser.NAMESPACE]
+        return [addresser.NAMESPACE]
 
     def apply(self, transaction, context):
         # Unpack transaction.
         header = transaction.header
-        payload = self._deserialize(transaction.payload)
+        payload = _deserialize(transaction.payload)
 
         # Call matching method for current operation.
+        if not 'op' in payload:
+            raise InvalidTransaction('invalid payload schema - no operation')
         operation = payload['op']
-        address = addressing.addresser.make_certificate_address(payload['data']['id'].encode())
+
+        # Get Certificate ID and Address. This will be used throughout regardless
+        # of the operation.
+        if not ('data' in payload and 'id' in payload['data']):
+            raise InvalidTransaction('invalid payload schema - no certificate id')
+
+        certificate_identifier = payload['data']['id']
+        certificate_address = addresser.make_certificate_address(certificate_identifier.encode())
+
+        # verify that the certificate we are dealing with exists.
+        certificates = _get_existing_certificates(context, certificate_address)
+
+        # Handle operation.
+        if not certificates:
+            raise InvalidTransaction('certificate does not exist')
+
+        certificate = _deserialize(certificates[0].data)
 
         if operation == 'issue':
-            addresses = self._issue_certificate(payload['data'], address, context)
+            addresses = _issue_certificate(payload['data'], certificate_address, context)
         elif operation == 'revoke':
-            addresses = self._revoke_certificate(header, payload['data'], address, context)
+            addresses = _revoke_certificate(
+                header, payload['data'], certificate_address, certificate, context
+            )
         elif operation == 'grant_access':
-            addresses = self._grant_access(header, payload['data'], address, context)
+            addresses = _grant_access(
+                header, payload['data'], certificate_address, certificate, context
+            )
         elif operation == 'revoke_access':
-            addresses = self._revoke_access(header, payload['data'], address, context)
+            addresses = _revoke_access(
+                header, payload['data'], certificate_address, certificate, context
+            )
         else:
             raise InvalidTransaction('unrecognized operation')
 
         print('Addresses:')
         print(addresses)
 
-    def _issue_certificate(self, data, address, context):
-        state_entries = self._get_existing_certificates(context, address)
 
-        if state_entries:
-            raise InvalidTransaction('this certificate already exists')
-        else:
-            return context.set_state({address: self._serialize(data)})
+def _issue_certificate(data, address, context):
+    return context.set_state({address: _serialize(data)})
 
-    def _revoke_certificate(self, header, data, address, context):
-        state_entries = self._get_existing_certificates(context, address)
 
-        if state_entries:
-            certificate = self._deserialize(state_entries[0].data)
+def _revoke_certificate(header, data, address, certificate, context):
+    signer = header.signer_public_key
+    owners = certificate['owners']
 
-            if header.signer_public_key not in certificate['owners'] and \
-                    header.signer_public_key not in certificate['owners']:
-                raise InvalidTransaction('subject is not an owner of this certificate')
+    if signer not in owners:
+        raise InvalidTransaction('subject is not an owner of this certificate')
 
-            certificate['certificate'] = data['certificate']
+    certificate['certificate'] = data['certificate']
 
-            return context.set_state({address: self._serialize(certificate)})
-        else:
-            raise InvalidTransaction('certificate does not exist')
+    return context.set_state({address: _serialize(certificate)})
 
-    def _grant_access(self, header, data, address, context):
-        state_entries = self._get_existing_certificates(context, address)
 
-        if state_entries:
-            certificate = self._deserialize(state_entries[0].data)
+def _grant_access(header, data, address, certificate, context):
+    signer = header.signer_public_key
+    owners = certificate['owners']
 
-            if header.signer_public_key not in certificate['owners']:
-                raise InvalidTransaction('subject has no permission to execute this operation')
+    if signer not in owners:
+        raise InvalidTransaction('subject has no permission to execute this operation')
 
-            certificate['permissions'].append(
-                {data['permissions']['id']: data['permissions']['data']}
-            )
+    if not 'permissions' in data:
+        raise InvalidTransaction('invalid payload schema - no permissions')
 
-            return context.set_state({address: self._serialize(certificate)})
-        else:
-            raise InvalidTransaction('certificate does not exist')
+    if not 'id' in data['permissions']:
+        raise InvalidTransaction('invalid payload schema - no identifier')
 
-    def _revoke_access(self, header, data, address, context):
-        state_entries = self._get_existing_certificates(context, address)
+    if not 'data' in data['permissions']:
+        raise InvalidTransaction('invalid payload schema - no encrypted key')
 
-        if state_entries:
-            certificate = self._deserialize(state_entries[0].data)
+    identifier = data['permissions']['id']
+    encrypted_key = data['permissions']['data']
 
-            if header.signer_public_key not in certificate['owners']:
-                raise InvalidTransaction('subject has no permission to execute this operation')
+    data = {
+        identifier: encrypted_key
+    }
+    certificate['permissions'].append(data)
 
-            permissions = []
+    return context.set_state({address: _serialize(certificate)})
 
-            for p in certificate['permissions']:
-                print(data['permissions']['id'])
-                print(list(p.keys())[0])
-                if list(p.keys())[0] != data['permissions']['id']:
-                    permissions.append(p)
 
-            print(permissions)
+def _revoke_access(header, data, address, certificate, context):
+    signer = header.signer_public_key
+    owners = certificate['owners']
 
-            certificate['permissions'] = permissions
+    if signer not in owners:
+        raise InvalidTransaction('subject has no permission to execute this operation')
 
-            return context.set_state({address: self._serialize(certificate)})
-        else:
-            raise InvalidTransaction('certificate does not exist')
+    permissions = []
 
-    def _serialize(self, data):
-        return cbor.dumps(data)
+    for p in certificate['permissions']:
+        # Append every permissions that doesn't match the identifier that has been
+        # sent in the payload, this will overwrite the current permissions and
+        # remove the access.
+        if list(p.keys())[0] != data['permissions']['id']:
+            permissions.append(p)
 
-    def _deserialize(self, data):
-        return cbor.loads(data)
+    certificate['permissions'] = permissions
 
-    def _get_existing_certificates(self, context, address):
-        return context.get_state([address])
+    return context.set_state({address: _serialize(certificate)})
+
+
+def _serialize(data):
+    return cbor.dumps(data)
+
+
+def _deserialize(data):
+    return cbor.loads(data)
+
+
+def _get_existing_certificates(context, address):
+    return context.get_state([address])
