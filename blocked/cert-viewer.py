@@ -18,7 +18,7 @@ from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
 from sawtooth_signing import CryptoFactory, create_context, secp256k1
 
-from processor import addresser
+import addressing
 
 
 class CertificateViewer():
@@ -37,7 +37,7 @@ class CertificateViewer():
         self._recruiter_rsa_public = self._recruiter_rsa.publickey()
 
     def main(self):
-        address = addresser.make_certificate_address(self._certificate.encode())
+        address = addressing.addresser.make_certificate_address(self._certificate.encode())
 
         print('Fetching Data...', end='', flush=True)
         try:

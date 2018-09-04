@@ -23,7 +23,7 @@ from sawtooth_sdk.protobuf.transaction_pb2 import (Transaction,
                                                    TransactionHeader)
 from sawtooth_signing import CryptoFactory, create_context, secp256k1
 
-from processor import addresser
+import addressing
 
 
 class CertificateIssuer():
@@ -44,7 +44,7 @@ class CertificateIssuer():
 
     def _generate_batch(self, issuer, recipient):
         payload = self._make_payload(issuer, recipient)
-        address = addresser.make_certificate_address(self._identifier.encode())
+        address = addressing.addresser.make_certificate_address(self._identifier.encode())
         transaction = self._make_transaction(address, issuer, cbor.dumps(payload))
         batch = self._make_batch(transaction)
 
@@ -74,12 +74,12 @@ class CertificateIssuer():
     def _make_transaction(self, address, issuer, payload):
         print('Creating Transaction...', end='', flush=True)
         header = TransactionHeader(
-            family_name=addresser.FAMILY_NAME,
-            family_version=addresser.FAMILY_VERSION,
-            inputs=[address, addresser.make_certificate_address(
-                self._issuer.encode()), addresser.make_certificate_address(self._recipient.as_hex().encode())],
-            outputs=[address, addresser.make_certificate_address(
-                self._issuer.encode()), addresser.make_certificate_address(self._recipient.as_hex().encode())],
+            family_name=addressing.addresser.FAMILY_NAME,
+            family_version=addressing.addresser.FAMILY_VERSION,
+            inputs=[address, addressing.addresser.make_certificate_address(
+                self._issuer.encode()), addressing.addresser.make_certificate_address(self._recipient.as_hex().encode())],
+            outputs=[address, addressing.addresser.make_certificate_address(
+                self._issuer.encode()), addressing.addresser.make_certificate_address(self._recipient.as_hex().encode())],
             signer_public_key=issuer,
             batcher_public_key=issuer,
             dependencies=[],

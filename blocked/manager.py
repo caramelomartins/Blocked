@@ -21,7 +21,7 @@ from sawtooth_sdk.protobuf.transaction_pb2 import (Transaction,
                                                    TransactionHeader)
 from sawtooth_signing import CryptoFactory, create_context, secp256k1
 
-from processor import addresser
+import addressing
 
 
 class PermissionsManager():
@@ -40,7 +40,7 @@ class PermissionsManager():
 
     def _generate_batch_list(self, key, symmetric_key):
         payload = self._make_payload(symmetric_key)
-        address = addresser.make_certificate_address(self._certificate.encode())
+        address = addressing.addresser.make_certificate_address(self._certificate.encode())
         transaction = self._make_transaction(address, key, cbor.dumps(payload))
         batch = self._make_batch(transaction)
 
@@ -70,10 +70,12 @@ class PermissionsManager():
     def _make_transaction(self, address, key, payload):
         print('Creating Transaction...', end='', flush=True)
         header = TransactionHeader(
-            family_name=addresser.FAMILY_NAME,
-            family_version=addresser.FAMILY_VERSION,
-            inputs=[address, addresser.make_certificate_address(self._subject.as_hex().encode())],
-            outputs=[address, addresser.make_certificate_address(self._subject.as_hex().encode())],
+            family_name=addressing.addresser.FAMILY_NAME,
+            family_version=addressing.addresser.FAMILY_VERSION,
+            inputs=[address, addressing.addresser.make_certificate_address(
+                self._subject.as_hex().encode())],
+            outputs=[address, addressing.addresser.make_certificate_address(
+                self._subject.as_hex().encode())],
             signer_public_key=key,
             batcher_public_key=key,
             dependencies=[],
@@ -129,7 +131,7 @@ class PermissionsManager():
         return base64.b64decode(symmetric_key)
 
     def main(self):
-        address = addresser.make_certificate_address(self._certificate.encode())
+        address = addressing.addresser.make_certificate_address(self._certificate.encode())
         signer_public_key = self._transaction_signer.get_public_key().as_hex()
 
         print('Fetching Data...', end='', flush=True)

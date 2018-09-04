@@ -10,7 +10,7 @@ import cbor
 from sawtooth_sdk.processor.exceptions import InvalidTransaction
 from sawtooth_sdk.processor.handler import TransactionHandler
 
-import addresser
+import addressing
 
 LOGGER = logging.getLogger()
 
@@ -19,15 +19,15 @@ class BlockedHandler(TransactionHandler):
 
     @property
     def family_name(self):
-        return addresser.FAMILY_NAME
+        return addressing.addresser.FAMILY_NAME
 
     @property
     def family_versions(self):
-        return [addresser.FAMILY_VERSION]
+        return [addressing.addresser.FAMILY_VERSION]
 
     @property
     def namespaces(self):
-        return [addresser.NAMESPACE]
+        return [addressing.addresser.NAMESPACE]
 
     def apply(self, transaction, context):
         # Unpack transaction.
@@ -36,7 +36,7 @@ class BlockedHandler(TransactionHandler):
 
         # Call matching method for current operation.
         operation = payload['op']
-        address = addresser.make_certificate_address(payload['data']['id'].encode())
+        address = addressing.addresser.make_certificate_address(payload['data']['id'].encode())
 
         if operation == 'issue':
             addresses = self._issue_certificate(payload['data'], address, context)

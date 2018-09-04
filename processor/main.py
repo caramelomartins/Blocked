@@ -1,3 +1,8 @@
+"""
+main.py
+
+This module implements the main function that executes the processor.
+"""
 import logging
 
 from sawtooth_sdk.processor.core import TransactionProcessor
