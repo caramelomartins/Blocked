@@ -12,7 +12,4 @@ NAMESPACE = hashlib.sha512(FAMILY_NAME.encode('utf-8')).hexdigest()[:6]
 
 
 def make_certificate_address(identifier):
-    return '{}{}'.format(
-        NAMESPACE,
-        hashlib.sha512(identifier).hexdigest()[:64]
-    )
+    return '{}{}'.format(NAMESPACE, hashlib.sha512(identifier).hexdigest()[:64])
