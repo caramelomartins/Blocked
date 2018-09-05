@@ -4,6 +4,7 @@ import json
 from urllib import error, request
 
 import pyDes
+from Crypto.Cipher import PKCS1_OAEP
 from sawtooth_sdk.protobuf.batch_pb2 import Batch, BatchHeader
 from sawtooth_sdk.protobuf.transaction_pb2 import (Transaction,
                                                    TransactionHeader)
@@ -31,6 +32,25 @@ def submit_batch(data):
     payload = resp.read().decode()
 
     return json.loads(payload)['link']
+
+
+def fetch_state(certificate_address):
+    print('Fetching Data...', end='', flush=True)
+    try:
+        req = request.Request(
+            'http://localhost:8008/state/{}'.format(certificate_address),
+            method='GET',
+            headers={'Content-Type': 'application/octet-stream'}
+        )
+        resp = request.urlopen(req)
+    except error.HTTPError as e:
+        print('[Error]')
+        resp = e.file
+        exit()
+
+    print('[OK]')
+
+    return resp.read()
 
 
 def make_transaction(payload, signer, inputs, outputs):
@@ -100,3 +120,33 @@ def des_encrypt(data, symmetric_key):
     encrypted_data = des.encrypt(encoded_data)
 
     return base64.b64encode(encrypted_data)
+
+
+def des_decrypt(data, symmetric_key):
+    des = pyDes.des(
+        symmetric_key, pyDes.CBC, b"\0\0\0\0\0\0\0\0", pad=None, padmode=pyDes.PAD_PKCS5
+    )
+
+    decoded_data = base64.b64decode(data)
+    decrypted_data = des.decrypt(decoded_data)
+
+    return decrypted_data.decode()
+
+
+def decrypt_symmetric_key(permissions, rsa):
+    symmetric_key = None
+
+    for i, p in enumerate(permissions):
+        try:
+            print('Attempt {}...'.format(i + 1), end='', flush=True)
+            symmetric_key = PKCS1_OAEP.new(rsa).decrypt(
+                base64.b64decode(p[list(p.keys())[0]].encode()))
+            print('[OK]')
+            break
+        except ValueError:
+            print('[Error]')
+
+    if not symmetric_key:
+        print('error: you do not have permission to access this certificate')
+        exit()
+    return base64.b64decode(symmetric_key)
