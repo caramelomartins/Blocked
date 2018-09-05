@@ -21,7 +21,7 @@ from sawtooth_sdk.protobuf.transaction_pb2 import (Transaction,
                                                    TransactionHeader)
 from sawtooth_signing import CryptoFactory, create_context, secp256k1
 
-import addressing
+from addressing import addresser
 
 
 class CertificateRevoker():
@@ -37,7 +37,7 @@ class CertificateRevoker():
 
     def _generate_batch(self, public_key, certificate, symmetric_key):
         payload = self._make_payload(certificate, symmetric_key)
-        address = addressing.addresser.make_certificate_address(self._certificate.encode())
+        address = addresser.make_certificate_address(self._certificate.encode())
         transaction = self._make_transaction(address, public_key, cbor.dumps(payload))
         batch = self._make_batch(transaction)
 
@@ -67,8 +67,8 @@ class CertificateRevoker():
     def _make_transaction(self, address, public_key, payload):
         print('Creating Transaction...', end='', flush=True)
         header = TransactionHeader(
-            family_name=addressing.addresser.FAMILY_NAME,
-            family_version=addressing.addresser.FAMILY_VERSION,
+            family_name=addresser.FAMILY_NAME,
+            family_version=addresser.FAMILY_VERSION,
             inputs=[address],
             outputs=[address],
             signer_public_key=public_key,
@@ -146,7 +146,7 @@ class CertificateRevoker():
         return base64.b64encode(d)
 
     def main(self):
-        address = addressing.addresser.make_certificate_address(self._certificate.encode())
+        address = addresser.make_certificate_address(self._certificate.encode())
 
         print('Fetching Data...', end='', flush=True)
         try:
