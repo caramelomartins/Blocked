@@ -35,7 +35,7 @@ class BlockedHandler(TransactionHandler):
         payload = _deserialize(transaction.payload)
 
         # Call matching method for current operation.
-        if not 'op' in payload:
+        if 'op' not in payload:
             raise InvalidTransaction('invalid payload schema - no operation')
         operation = payload['op']
 
@@ -47,14 +47,16 @@ class BlockedHandler(TransactionHandler):
         certificate_identifier = payload['data']['id']
         certificate_address = addresser.make_certificate_address(certificate_identifier.encode())
 
-        # verify that the certificate we are dealing with exists.
-        certificates = _get_existing_certificates(context, certificate_address)
+        # Validate Certificate exists, when not issuing a new one.
+        if operation != 'issue':
+            # verify that the certificate we are dealing with exists.
+            certificates = _get_existing_certificates(context, certificate_address)
 
-        # Handle operation.
-        if not certificates:
-            raise InvalidTransaction('certificate does not exist')
+            # Handle operation.
+            if not certificates:
+                raise InvalidTransaction('certificate does not exist')
 
-        certificate = _deserialize(certificates[0].data)
+            certificate = _deserialize(certificates[0].data)
 
         if operation == 'issue':
             addresses = _issue_certificate(payload['data'], certificate_address, context)
