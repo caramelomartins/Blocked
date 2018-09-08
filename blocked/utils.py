@@ -4,7 +4,9 @@ import json
 from urllib import error, request
 
 import pyDes
+from Crypto import Random
 from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Cipher import AES
 from sawtooth_sdk.protobuf.batch_pb2 import Batch, BatchHeader
 from sawtooth_sdk.protobuf.transaction_pb2 import (Transaction,
                                                    TransactionHeader)
@@ -112,25 +114,31 @@ def make_batch(txn, signer):
 
 
 def des_encrypt(data, symmetric_key):
-    des = pyDes.des(
-        symmetric_key, pyDes.CBC, b"\0\0\0\0\0\0\0\0", pad=None, padmode=pyDes.PAD_PKCS5
-    )
+    iv = Random.new().read(AES.block_size)
+    aes = AES.new(symmetric_key, AES.MODE_CFB, iv)
 
-    encoded_data = json.dumps(data).encode('utf-8')
-    encrypted_data = des.encrypt(encoded_data)
+    encoded_data = _pad(json.dumps(data))
+    encrypted_data = aes.encrypt(encoded_data)
 
-    return base64.b64encode(encrypted_data)
+    return base64.b64encode(iv + encrypted_data)
 
 
 def des_decrypt(data, symmetric_key):
-    des = pyDes.des(
-        symmetric_key, pyDes.CBC, b"\0\0\0\0\0\0\0\0", pad=None, padmode=pyDes.PAD_PKCS5
-    )
-
     decoded_data = base64.b64decode(data)
-    decrypted_data = des.decrypt(decoded_data)
+    iv = decoded_data[:AES.block_size]
 
-    return decrypted_data.decode()
+    aes = AES.new(symmetric_key, AES.MODE_CFB, iv)
+    decrypted_data = aes.decrypt(decoded_data[AES.block_size:])
+
+    return _unpad(decrypted_data).decode()
+
+
+def _pad(s):
+    return s + (AES.block_size - len(s) % AES.block_size) * chr(AES.block_size - len(s) % AES.block_size)
+
+
+def _unpad(s):
+    return s[:-ord(s[len(s)-1:])]
 
 
 def decrypt_symmetric_key(permissions, rsa):

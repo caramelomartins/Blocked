@@ -43,10 +43,10 @@ class CertificateIssuer():
         with open(recipient_rsa, 'r') as f:
             self._recipient_rsa = RSA.importKey(f.read())
 
-        # DES
-        # Here we generate a random hash and we slice it for the first 8 bytes which
+        # AES
+        # Here we generate a random hash and we slice it for the first 16 bytes which
         # is what DES accepts.
-        self._symmetric_key = hashlib.sha256(os.urandom(128)).hexdigest()[:8].encode()
+        self._symmetric_key = os.urandom(32)
 
         # Certificate Data
         self._certificate_identifier = str(uuid.uuid4())
