@@ -67,9 +67,7 @@ class CertificateRevoker():
         )
         print('[OK]')
 
-        print('Fetching State...', end='', flush=True)
         raw_data = utils.fetch_state(certificate_address)
-        print('[OK]')
 
         if raw_data:
             encoded_data = json.loads(raw_data)

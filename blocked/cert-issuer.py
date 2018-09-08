@@ -34,7 +34,6 @@ class CertificateIssuer():
         self._issuer_dsa_private = secp256k1.Secp256k1PrivateKey.from_hex(secret)
         self._transaction_signer = self._crypto_factory.new_signer(self._issuer_dsa_private)
         self._issuer_dsa_public = self._transaction_signer.get_public_key()
-
         self._recipient_dsa_public = secp256k1.Secp256k1PublicKey.from_hex(recipient)
 
         # RSA
