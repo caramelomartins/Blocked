@@ -17,7 +17,7 @@ from sawtooth_sdk.protobuf.batch_pb2 import BatchList
 from sawtooth_signing import CryptoFactory, create_context, secp256k1
 
 from addressing import addresser
-import utils
+from blocked import utils
 
 
 class CertificateIssuer():
@@ -125,7 +125,7 @@ class CertificateIssuer():
         print(link)
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--recipient', help="Recipient's DSA Public Key'", required=True)
     parser.add_argument('--secret', help="Issuer's DSA Private Key", required=True)

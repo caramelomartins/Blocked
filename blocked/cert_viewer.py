@@ -12,8 +12,8 @@ import cbor
 from Crypto.PublicKey import RSA
 from sawtooth_signing import secp256k1
 
-import utils
 from addressing import addresser
+from blocked import utils
 
 
 class CertificateViewer():
@@ -61,7 +61,7 @@ class CertificateViewer():
             print('error: could not find certificate')
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--certificate', help="identifier of certificate", required=True)
     parser.add_argument('--secret-dsa', help='secret DSA key to validate identity', required=True)

@@ -15,7 +15,7 @@ from sawtooth_sdk.protobuf.batch_pb2 import BatchList
 from sawtooth_signing import CryptoFactory, create_context, secp256k1
 
 from addressing import addresser
-import utils
+from blocked import utils
 
 
 class PermissionsManager():
@@ -105,7 +105,7 @@ class PermissionsManager():
             print('error: could not find certificate')
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--certificate', help="identifier of certificate", required=True)
     parser.add_argument('--subject-dsa', help='subject DSA identifier', required=True)
