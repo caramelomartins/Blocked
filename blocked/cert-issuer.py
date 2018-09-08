@@ -7,16 +7,13 @@ Issue a certificate from a given Institution to a given Student.
 import argparse
 import base64
 import datetime
-import hashlib
 import os
 import uuid
 
 import cbor
-import Crypto
-from Crypto import Random
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
-from sawtooth_sdk.protobuf.batch_pb2 import Batch, BatchHeader, BatchList
+from sawtooth_sdk.protobuf.batch_pb2 import BatchList
 from sawtooth_signing import CryptoFactory, create_context, secp256k1
 
 from addressing import addresser
@@ -100,13 +97,6 @@ class CertificateIssuer():
             self._certificate_identifier.encode()
         )
 
-        issuer_address = addresser.make_certificate_address(
-            self._issuer_dsa_public.as_hex().encode()
-        )
-
-        recipient_address = addresser.make_certificate_address(
-            self._recipient_dsa_public.as_hex().encode()
-        )
         print('[OK]')
 
         print('Generating Payload...', end='', flush=True)

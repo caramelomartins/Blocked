@@ -6,19 +6,12 @@ This script allows users to manage access control policies for the system.
 """
 import argparse
 import base64
-import hashlib
 import json
-from urllib import error, request
 
 import cbor
-import Crypto
-import pyDes
-from Crypto import Random
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
-from sawtooth_sdk.protobuf.batch_pb2 import Batch, BatchHeader, BatchList
-from sawtooth_sdk.protobuf.transaction_pb2 import (Transaction,
-                                                   TransactionHeader)
+from sawtooth_sdk.protobuf.batch_pb2 import BatchList
 from sawtooth_signing import CryptoFactory, create_context, secp256k1
 
 from addressing import addresser

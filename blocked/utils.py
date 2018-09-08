@@ -3,7 +3,6 @@ import hashlib
 import json
 from urllib import error, request
 
-import pyDes
 from Crypto import Random
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Cipher import AES
