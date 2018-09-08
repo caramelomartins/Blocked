@@ -95,8 +95,6 @@ class CertificateIssuer():
         return payload
 
     def main(self):
-        signer_public_key = self._issuer_dsa_public.as_hex()
-
         print('Generating Addresses...', end='', flush=True)
         # Generate an Address for the new Certificate.
         certificate_address = addresser.make_certificate_address(
@@ -122,8 +120,8 @@ class CertificateIssuer():
         transaction = utils.make_transaction(
             encoded_payload,
             self._transaction_signer,
-            [certificate_address, issuer_address, recipient_address],
-            [certificate_address, issuer_address, recipient_address]
+            [certificate_address],
+            [certificate_address]
         )
 
         # Create Batch.

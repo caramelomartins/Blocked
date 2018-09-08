@@ -33,11 +33,15 @@ class CertificateViewer():
             self._rsa = RSA.importKey(f.read())
 
     def main(self):
+        print('Generating Addresses...', end='', flush=True)
         certificate_address = addresser.make_certificate_address(
             self._certificate_identifier.encode()
         )
+        print('[OK]')
 
+        print('Fetching State...', end='', flush=True)
         raw_data = utils.fetch_state(certificate_address)
+        print('[OK]')
 
         if raw_data:
             encoded_data = json.loads(raw_data)

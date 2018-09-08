@@ -22,174 +22,85 @@ from sawtooth_sdk.protobuf.transaction_pb2 import (Transaction,
 from sawtooth_signing import CryptoFactory, create_context, secp256k1
 
 from addressing import addresser
+import utils
 
 
 class CertificateRevoker():
 
-    def __init__(self, certificate, secret):
+    def __init__(self, certificate, dsa, rsa):
+        # We need this to generate the DSA-related information.
         self._context = create_context('secp256k1')
-        self._private_key = secp256k1.Secp256k1PrivateKey.from_hex(secret)
-        self._certificate = certificate
-        self._transaction_signer = CryptoFactory(self._context).new_signer(self._private_key)
+        self._crypto_factory = CryptoFactory(self._context)
 
-        self._recipient_rsa = RSA.importKey(open('keys/recipient.keys/rsa/recipient', 'r').read())
-        self._recipient_rsa_public = self._recipient_rsa.publickey()
-
-    def _generate_batch(self, public_key, certificate, symmetric_key):
-        payload = self._make_payload(certificate, symmetric_key)
-        address = addresser.make_certificate_address(self._certificate.encode())
-        transaction = self._make_transaction(address, public_key, cbor.dumps(payload))
-        batch = self._make_batch(transaction)
-
-        batch_list = BatchList(batches=[batch]).SerializeToString()
-        return batch_list
-
-    def _make_batch(self, txn):
-        print('Creating Batch...', end='', flush=True)
-        transactions = [txn]
-
-        batch_header = BatchHeader(
-            signer_public_key=self._transaction_signer.get_public_key().as_hex(),
-            transaction_ids=[txn.header_signature for txn in transactions],
-        ).SerializeToString()
-
-        signature = self._transaction_signer.sign(batch_header)
-
-        batch = Batch(
-            header=batch_header,
-            header_signature=signature,
-            transactions=transactions
+        # DSA
+        self._dsa_private = secp256k1.Secp256k1PrivateKey.from_hex(dsa)
+        self._dsa_public = secp256k1.Secp256k1PublicKey(
+            self._dsa_private.secp256k1_private_key.pubkey
         )
-        print('[OK]')
+        self._transaction_signer = self._crypto_factory.new_signer(self._dsa_private)
 
-        return batch
+        # RSA
+        with open(rsa, 'r') as f:
+            self._rsa = RSA.importKey(f.read())
 
-    def _make_transaction(self, address, public_key, payload):
-        print('Creating Transaction...', end='', flush=True)
-        header = TransactionHeader(
-            family_name=addresser.FAMILY_NAME,
-            family_version=addresser.FAMILY_VERSION,
-            inputs=[address],
-            outputs=[address],
-            signer_public_key=public_key,
-            batcher_public_key=public_key,
-            dependencies=[],
-            payload_sha512=hashlib.sha512(payload).hexdigest()
-        ).SerializeToString()
-
-        signature = self._transaction_signer.sign(header)
-
-        transaction = Transaction(
-            header=header,
-            header_signature=signature,
-            payload=payload
-        )
-        print('[OK]')
-
-        return transaction
+        # Certificate Data
+        self._certificate_identifier = certificate
 
     def _make_payload(self, certificate, symmetric_key):
         payload = {}
 
         certificate['active'] = False
 
-        encrypted_certificate = self._encrypt(certificate, symmetric_key)
+        encrypted_certificate = utils.des_encrypt(certificate, symmetric_key)
 
         payload['op'] = 'revoke'
         payload['data'] = {}
-        payload['data']['id'] = self._certificate
+        payload['data']['id'] = self._certificate_identifier
         payload['data']['certificate'] = encrypted_certificate.decode()
 
         return payload
 
-    def _decrypt_certificate(self, symmetric_key, data):
-        k = pyDes.des(
-            symmetric_key,
-            pyDes.CBC,
-            b"\0\0\0\0\0\0\0\0",
-            pad=None,
-            padmode=pyDes.PAD_PKCS5
-        )
-
-        certificate = k.decrypt(base64.b64decode(data['certificate'])).decode()
-        return certificate
-
-    def _decrypt_symmetric_key(self, permissions):
-        symmetric_key = None
-
-        for i, p in enumerate(permissions):
-            try:
-                print('Attempt {}...'.format(i+1), end='', flush=True)
-                symmetric_key = PKCS1_OAEP.new(self._recipient_rsa).decrypt(
-                    base64.b64decode(p[list(p.keys())[0]].encode()))
-                print('[OK]')
-                break
-            except ValueError:
-                print('[Error]')
-
-        if not symmetric_key:
-            print('error: you do not have permission to access this certificate')
-            exit()
-        return base64.b64decode(symmetric_key)
-
-    def _encrypt(self, data, symmetric_key):
-        k = pyDes.des(
-            symmetric_key,
-            pyDes.CBC,
-            b"\0\0\0\0\0\0\0\0",
-            pad=None,
-            padmode=pyDes.PAD_PKCS5
-        )
-        d = k.encrypt(json.dumps(data).encode('utf-8'))
-        assert k.decrypt(d) == json.dumps(data).encode('utf-8')
-
-        return base64.b64encode(d)
-
     def main(self):
-        address = addresser.make_certificate_address(self._certificate.encode())
-
-        print('Fetching Data...', end='', flush=True)
-        try:
-            req = request.Request(
-                'http://localhost:8008/state/{}'.format(address),
-                method='GET',
-                headers={'Content-Type': 'application/octet-stream'}
-            )
-            resp = request.urlopen(req)
-        except error.HTTPError as e:
-            print('[Error]')
-            resp = e.file
+        print('Generating Addresses...', end='', flush=True)
+        certificate_address = addresser.make_certificate_address(
+            self._certificate_identifier.encode()
+        )
         print('[OK]')
 
-        raw_data = resp.read()
+        print('Fetching State...', end='', flush=True)
+        raw_data = utils.fetch_state(certificate_address)
+        print('[OK]')
 
         if raw_data:
             encoded_data = json.loads(raw_data)
             data = cbor.loads(base64.b64decode(encoded_data['data']))
-            symmetric_key = self._decrypt_symmetric_key(data['permissions'])
+            symmetric_key = utils.decrypt_symmetric_key(data['permissions'], self._rsa)
 
-            certificate = json.loads(self._decrypt_certificate(symmetric_key, data))
+            certificate = json.loads(utils.des_decrypt(data['certificate'], symmetric_key))
 
-            signer_public_key = self._transaction_signer.get_public_key().as_hex()
-            batch_list = self._generate_batch(signer_public_key, certificate, symmetric_key)
-
-            print(signer_public_key)
-
-            print('Submitting Request...', end='', flush=True)
-            try:
-                req = request.Request(
-                    'http://localhost:8008/batches',
-                    batch_list,
-                    method='POST',
-                    headers={'Content-Type': 'application/octet-stream'}
-                )
-                resp = request.urlopen(req)
-            except error.HTTPError as e:
-                resp = e.file
+            print('Generating Payload...', end='', flush=True)
+            # Create and encode the payload.
+            payload = self._make_payload(certificate, symmetric_key)
+            encoded_payload = cbor.dumps(payload)
             print('[OK]')
 
-            print('Addresses:')
-            print(resp.read().decode())
+            # Create Transaction.
+            transaction = utils.make_transaction(
+                encoded_payload,
+                self._transaction_signer,
+                [certificate_address],
+                [certificate_address]
+            )
+
+            # Create Batch.
+            batch = utils.make_batch(transaction, self._transaction_signer)
+            batch_list = BatchList(batches=[batch]).SerializeToString()
+
+            # Submit new Batch.
+            link = utils.submit_batch(batch_list)
+
+            print('Status:')
+            print(link)
         else:
             print('error: could not find certificate')
 
@@ -197,9 +108,9 @@ class CertificateRevoker():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--certificate', help="identifier of certificate", required=True)
-    parser.add_argument(
-        '-s', '--secret', help='subject that is performing management', required=True)
+    parser.add_argument('--secret-dsa', help='secret DSA key to validate identity', required=True)
+    parser.add_argument('--secret-rsa', help='secret RSA key to decrypt the data', required=True)
     args = parser.parse_args()
 
-    issuer = CertificateRevoker(args.certificate, args.secret)
+    issuer = CertificateRevoker(args.certificate, args.secret_dsa, args.secret_rsa)
     issuer.main()
