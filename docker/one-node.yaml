@@ -35,3 +35,11 @@ services:
     depends_on:
       - validator
     entrypoint: settings-tp -vv -C tcp://validator:4004
+
+  blocked-tp:
+    image: blocked
+    container_name: blocked-tp
+    depends_on:
+      - validator
+      - settings-tp
+    entrypoint: python3 processor/main.py -C tcp://validator:4004
