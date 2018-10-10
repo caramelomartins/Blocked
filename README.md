@@ -25,9 +25,9 @@ To finish it, just use `Ctrl+C`.
 ### Issuer
 
 ```
-$ ./blocked/cert-issuer.py --help
-usage: cert-issuer.py [-h] --recipient RECIPIENT --secret SECRET
-                      --recipient-rsa RECIPIENT_RSA --issuer-rsa ISSUER_RSA
+$ ./cert-issuer --help
+usage: cert-issuer [-h] --recipient RECIPIENT --secret SECRET --recipient-rsa
+                   RECIPIENT_RSA --issuer-rsa ISSUER_RSA
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -43,9 +43,9 @@ optional arguments:
 ### Revoker
 
 ```
-$ ./blocked/cert-revoker.py --help
-usage: cert-revoker.py [-h] -c CERTIFICATE --secret-dsa SECRET_DSA
-                       --secret-rsa SECRET_RSA
+$ ./cert-revoker --help
+usage: cert-revoker [-h] -c CERTIFICATE --secret-dsa SECRET_DSA --secret-rsa
+                    SECRET_RSA
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -60,9 +60,9 @@ optional arguments:
 ### Viewer
 
 ```
-$ ./blocked/cert-viewer.py --help
-usage: cert-viewer.py [-h] --certificate CERTIFICATE --secret-dsa SECRET_DSA
-                      --secret-rsa SECRET_RSA
+$ ./cert-viewer --help
+usage: cert-viewer [-h] --certificate CERTIFICATE --secret-dsa SECRET_DSA
+                   --secret-rsa SECRET_RSA
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -74,13 +74,13 @@ optional arguments:
                         secret RSA key to decrypt the data
 ```
 
-### Manager
+### Access Manager
 
 ```
-$ ./blocked/manager.py --help
-usage: manager.py [-h] -c CERTIFICATE --subject-dsa SUBJECT_DSA --subject-rsa
-                  SUBJECT_RSA --secret-dsa SECRET_DSA --secret-rsa SECRET_RSA
-                  [-r]
+$ ./access-manager --help
+usage: access-manager [-h] -c CERTIFICATE --subject-dsa SUBJECT_DSA
+                      --subject-rsa SUBJECT_RSA --secret-dsa SECRET_DSA
+                      --secret-rsa SECRET_RSA [-r]
 
 optional arguments:
   -h, --help            show this help message and exit

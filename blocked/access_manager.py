@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-manager.py
+access-manager.py
 
 This script allows users to manage access control policies for the system.
 """
