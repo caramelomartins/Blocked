@@ -7,18 +7,8 @@ Python implementation of an Access Control application, for Educational Certific
 ## Environment
 
 ```
-$ docker-compose up
+$ docker-compose -f docker/<docker file> up
 ```
-
-## Processor
-
-To start the execution of the Transaction Processor:
-
-```
-$ python processor/main.py
-```
-
-To finish it, just use `Ctrl+C`.
 
 ## Scripts
 
