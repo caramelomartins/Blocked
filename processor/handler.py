@@ -99,7 +99,7 @@ def _grant_access(header, data, address, certificate, context):
     signer = header.signer_public_key
     owners = certificate['owners']
 
-    if signer not in owners:
+    if signer != owners[1]:
         raise InvalidTransaction('subject has no permission to execute this operation')
 
     if not 'permissions' in data:
